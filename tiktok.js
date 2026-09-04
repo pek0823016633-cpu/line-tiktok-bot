@@ -18,7 +18,6 @@ const path = require('path');
 const CLIENT_KEY = process.env.TIKTOK_CLIENT_KEY;
 const CLIENT_SECRET = process.env.TIKTOK_CLIENT_SECRET;
 const REDIRECT_URI = process.env.TIKTOK_REDIRECT_URI;
-const PRIVACY_LEVEL = process.env.TIKTOK_PRIVACY_LEVEL || 'SELF_ONLY';
 
 const TOKEN_FILE = path.join(__dirname, 'tiktok-tokens.json');
 
@@ -113,7 +112,10 @@ async function postVideoFromUrl({ videoUrl, title }) {
 
   const creatorInfo = await queryCreatorInfo(accessToken);
   const allowedPrivacy = creatorInfo.privacy_level_options || [];
-  const privacyLevel = allowedPrivacy.includes(PRIVACY_LEVEL) ? PRIVACY_LEVEL : allowedPrivacy[0];
+  console.log('TikTok privacy_level_options:', allowedPrivacy);
+  // แอปที่ยังไม่ผ่านการตรวจสอบ (unaudited) โพสต์ได้เฉพาะแบบส่วนตัวเท่านั้น
+  // ไม่ว่า creator_info จะแนะนำตัวเลือกอื่นมาก็ตาม จึงบังคับใช้ SELF_ONLY เป็นค่าหลักเสมอ
+  const privacyLevel = allowedPrivacy.includes('SELF_ONLY') ? 'SELF_ONLY' : allowedPrivacy[0];
   if (!privacyLevel) {
     throw new Error('บัญชี TikTok นี้ไม่มีตัวเลือกความเป็นส่วนตัวที่โพสต์ได้เลย (ตรวจสอบสถานะแอปในหน้า Developer Portal)');
   }
