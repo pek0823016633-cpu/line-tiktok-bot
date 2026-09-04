@@ -45,9 +45,10 @@ function savePending(data) {
 // curl -X POST http://localhost:3000/send-approval \
 //   -H "Content-Type: application/json" \
 //   -d '{"id":"video1","product":"Car Paper Air Freshener","videoUrl":"https://..."}'
-app.use(express.json());
-
-app.post('/send-approval', async (req, res) => {
+// NOTE: express.json() is scoped to this route only — line.middleware() below
+// needs the raw, unparsed request body to verify LINE's signature, so it
+// can't be registered globally with app.use() or the webhook breaks.
+app.post('/send-approval', express.json(), async (req, res) => {
   const { id, product, videoUrl } = req.body;
   if (!YOUR_USER_ID) {
     return res.status(400).json({
