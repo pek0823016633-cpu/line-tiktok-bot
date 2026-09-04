@@ -80,6 +80,11 @@ app.post('/send-approval', express.json(), async (req, res) => {
   res.json({ ok: true, sent: true });
 });
 
+// ไฟล์ยืนยันโดเมนของ TikTok (สำหรับ URL properties verification)
+app.get('/tiktokGCmqv6FaoVnNXWurFe89B6zCVbXPIoJM.txt', (req, res) => {
+  res.type('text/plain').send('tiktok-developers-site-verification=GCmqv6FaoVnNXWurFe89B6zCVbXPIoJM');
+});
+
 // ---- หน้า Terms of Service / Privacy Policy (TikTok Developer app ต้องการ URL นี้) ----
 app.get('/terms', (req, res) => {
   res.type('text/plain').send(
