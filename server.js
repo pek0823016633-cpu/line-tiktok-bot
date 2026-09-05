@@ -80,6 +80,9 @@ app.post('/send-approval', express.json(), async (req, res) => {
   res.json({ ok: true, sent: true });
 });
 
+// วิดีโอตัวอย่างไว้ทดสอบระบบโพสต์ TikTok (ขนาด/สัดส่วนผ่านเกณฑ์ของ TikTok)
+app.use('/test-assets', express.static(path.join(__dirname, 'test-assets')));
+
 // ไฟล์ยืนยันโดเมนของ TikTok (สำหรับ URL properties verification)
 app.get('/tiktokGCmqv6FaoVnNXWurFe89B6zCVbXPIoJM.txt', (req, res) => {
   res.type('text/plain').send('tiktok-developers-site-verification=GCmqv6FaoVnNXWurFe89B6zCVbXPIoJM');
@@ -155,8 +158,24 @@ async function postApprovedVideo(id) {
       videoUrl: entry.videoUrl,
       title: entry.product,
     });
-    entry.status = 'posted';
     entry.tiktokPublishId = publishId;
+
+    // init สำเร็จแค่แปลว่า TikTok "รับคำขอแล้ว" ต้องเช็คผลจริงอีกทีก่อนบอกว่าสำเร็จ
+    const result = await tiktok.waitForPublishResult(publishId);
+    console.log(`ผลการโพสต์ "${id}" (${entry.product}):`, result);
+
+    if (result && result.status === 'FAILED') {
+      entry.status = 'post_failed';
+      entry.error = result.fail_reason;
+      savePending(pending);
+      await client.pushMessage(YOUR_USER_ID, {
+        type: 'text',
+        text: `โพสต์ "${entry.product}" ขึ้น TikTok ไม่สำเร็จ: ${result.fail_reason}`,
+      });
+      return;
+    }
+
+    entry.status = 'posted';
     savePending(pending);
     console.log(`โพสต์ "${id}" (${entry.product}) ขึ้น TikTok สำเร็จ — publish_id: ${publishId}`);
 
