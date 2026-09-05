@@ -66,7 +66,7 @@ app.post('/send-approval', express.json(), async (req, res) => {
 
   // ส่งวิดีโอจริงให้ดูในไลน์ก่อน (ไม่ใช่แค่ลิงก์ข้อความ) แล้วค่อยตามด้วยปุ่มใช่/ไม่
   // วิดีโอต้องมี preview image ประกอบด้วยเสมอ ถ้าไม่ได้ส่ง thumbnailUrl มา ใช้รูปสำรองของบอทเอง
-  const fallbackThumbnail = `${req.protocol}://${req.get('host')}/test-assets/video-thumbnail.jpg`;
+  const fallbackThumbnail = `https://${req.get('host')}/test-assets/video-thumbnail.jpg`;
 
   await client.pushMessage(YOUR_USER_ID, [
     {
