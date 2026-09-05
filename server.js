@@ -92,7 +92,11 @@ app.post('/send-approval', express.json(), async (req, res) => {
 });
 
 // วิดีโอตัวอย่างไว้ทดสอบระบบโพสต์ TikTok (ขนาด/สัดส่วนผ่านเกณฑ์ของ TikTok)
-app.use('/test-assets', express.static(path.join(__dirname, 'test-assets')));
+// เปิด CORS ให้โฟลเดอร์นี้ เพราะบางครั้งต้องดึงไฟล์ข้ามโดเมนไปใช้ในเครื่องมือสร้างวิดีโอ
+app.use('/test-assets', (req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  next();
+}, express.static(path.join(__dirname, 'test-assets')));
 
 // ไฟล์ยืนยันโดเมนของ TikTok (สำหรับ URL properties verification)
 app.get('/tiktokGCmqv6FaoVnNXWurFe89B6zCVbXPIoJM.txt', (req, res) => {
