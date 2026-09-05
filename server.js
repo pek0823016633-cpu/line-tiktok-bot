@@ -233,16 +233,22 @@ async function handleEvent(event) {
 
       // โพสต์ TikTok ต้องไม่ขึ้นอยู่กับว่า replyMessage สำเร็จหรือไม่ —
       // ถ้า reply พังไป (token หมดอายุ, เน็ตสะดุด ฯลฯ) ก็ยังต้องโพสต์ต่อ
-      if (isApproved) {
-        postApprovedVideo(id).catch((err) => console.error('postApprovedVideo error:', err));
-      }
-
-      return client.replyMessage(event.replyToken, {
+      const replyPromise = client.replyMessage(event.replyToken, {
         type: 'text',
         text: isApproved
           ? `รับทราบ — อนุมัติ "${pending[id].product}" แล้ว กำลังโพสต์ขึ้น TikTok...`
           : `รับทราบ — ข้าม "${pending[id].product}"`,
       }).catch((err) => console.error('replyMessage error:', err));
+
+      if (!isApproved) {
+        return replyPromise;
+      }
+
+      // ต้องรอให้ postApprovedVideo ทำงานจบใน request นี้เลย (ไม่ปล่อยไว้เบื้องหลัง)
+      // เพราะ Render free tier ไม่รับประกันว่างานเบื้องหลังจะรันจนจบหลังตอบ
+      // webhook response ไปแล้ว — ปล่อยไว้แบบเดิมทำให้ข้อความแจ้งผลไม่ส่งถึงบางครั้ง
+      await Promise.allSettled([replyPromise, postApprovedVideo(id)]);
+      return;
     }
   }
 

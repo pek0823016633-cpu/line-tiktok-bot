@@ -192,7 +192,7 @@ async function checkPublishStatus(publishId) {
 
 // เช็คสถานะซ้ำจนกว่าจะได้ผลจริง (PUBLISH_COMPLETE / FAILED / SEND_TO_USER_INBOX)
 // เพราะ init สำเร็จแค่แปลว่า "รับคำขอแล้ว" ไม่ได้แปลว่าโพสต์ขึ้นจริง
-async function waitForPublishResult(publishId, { timeoutMs = 30000, intervalMs = 2000 } = {}) {
+async function waitForPublishResult(publishId, { timeoutMs = 20000, intervalMs = 2000 } = {}) {
   const deadline = Date.now() + timeoutMs;
   let last;
   while (Date.now() < deadline) {
