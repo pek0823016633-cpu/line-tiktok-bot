@@ -98,6 +98,24 @@ app.use('/test-assets', (req, res, next) => {
   next();
 }, express.static(path.join(__dirname, 'test-assets')));
 
+// รูปสินค้าที่ผู้ใช้ส่งเข้ามาทาง LINE จะถูกเก็บไว้ที่นี่ (ดูฟังก์ชัน handleEvent)
+const INCOMING_DIR = path.join(__dirname, 'test-assets', 'incoming');
+fs.mkdirSync(INCOMING_DIR, { recursive: true });
+
+// รายการรูปที่เพิ่งได้รับทาง LINE เรียงจากใหม่ไปเก่า — ใช้เช็คว่ามีรูปใหม่เข้ามาไหม
+app.get('/incoming-images', (req, res) => {
+  const files = fs
+    .readdirSync(INCOMING_DIR)
+    .map((name) => ({ name, mtime: fs.statSync(path.join(INCOMING_DIR, name)).mtimeMs }))
+    .sort((a, b) => b.mtime - a.mtime)
+    .map((f) => ({
+      name: f.name,
+      url: `https://${req.get('host')}/test-assets/incoming/${f.name}`,
+      receivedAt: new Date(f.mtime).toISOString(),
+    }));
+  res.json({ images: files });
+});
+
 // ไฟล์ยืนยันโดเมนของ TikTok (สำหรับ URL properties verification)
 app.get('/tiktokGCmqv6FaoVnNXWurFe89B6zCVbXPIoJM.txt', (req, res) => {
   res.type('text/plain').send('tiktok-developers-site-verification=GCmqv6FaoVnNXWurFe89B6zCVbXPIoJM');
@@ -225,7 +243,15 @@ app.post('/webhook', line.middleware(config), (req, res) => {
 });
 
 async function handleEvent(event) {
-  if (event.type !== 'message' || event.message.type !== 'text') {
+  if (event.type !== 'message') {
+    return Promise.resolve(null);
+  }
+
+  if (event.message.type === 'image') {
+    return handleImageMessage(event);
+  }
+
+  if (event.message.type !== 'text') {
     return Promise.resolve(null);
   }
 
@@ -270,6 +296,24 @@ async function handleEvent(event) {
   return client.replyMessage(event.replyToken, {
     type: 'text',
     text: `สวัสดี! LINE user ID ของคุณคือ:\n${userId}\n\n(บันทึกค่านี้ลงใน LINE_USER_ID ในไฟล์ .env เพื่อให้บอทส่งตัวอย่างวิดีโอให้คุณได้)`,
+  });
+}
+
+// รับรูปสินค้าที่ผู้ใช้ส่งเข้ามาทาง LINE แล้วเก็บไว้ให้ดึงไปทำวิดีโอโฆษณาต่อได้
+// (ตัวบอทเองไม่ได้สร้างวิดีโอให้อัตโนมัติ แค่รับรูปแล้วเปิด URL สาธารณะไว้)
+async function handleImageMessage(event) {
+  const stream = await client.getMessageContent(event.message.id);
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  const buffer = Buffer.concat(chunks);
+
+  const filename = `${Date.now()}-${event.message.id}.jpg`;
+  fs.writeFileSync(path.join(INCOMING_DIR, filename), buffer);
+  console.log(`ได้รับรูปจาก LINE: ${filename} (${buffer.length} bytes)`);
+
+  return client.replyMessage(event.replyToken, {
+    type: 'text',
+    text: 'ได้รับรูปสินค้าแล้วครับ กำลังนำไปสร้างวิดีโอโฆษณาให้ รอแป๊บนึงนะครับ',
   });
 }
 
