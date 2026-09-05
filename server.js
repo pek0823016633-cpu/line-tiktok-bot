@@ -50,7 +50,7 @@ function savePending(data) {
 // line.middleware() ด้านล่างต้องใช้ raw body ที่ยังไม่ถูกแปลงเพื่อตรวจสอบ
 // ลายเซ็นของ LINE — ถ้าไปประกาศแบบ global ผ่าน app.use() webhook จะพัง
 app.post('/send-approval', express.json(), async (req, res) => {
-  const { id, product, videoUrl } = req.body;
+  const { id, product, videoUrl, thumbnailUrl } = req.body;
   if (!YOUR_USER_ID) {
     return res.status(400).json({
       error: 'ยังไม่ได้ตั้งค่า LINE_USER_ID — ส่งข้อความอะไรก็ได้หาบอทก่อน แล้วดู userId จาก console log ของเซิร์ฟเวอร์ จากนั้นนำไปใส่ใน .env',
@@ -64,18 +64,29 @@ app.post('/send-approval', express.json(), async (req, res) => {
   pending[id] = { product, videoUrl, status: 'waiting' };
   savePending(pending);
 
-  await client.pushMessage(YOUR_USER_ID, {
-    type: 'template',
-    altText: `อนุมัติวิดีโอสำหรับ ${product} หรือไม่?`,
-    template: {
-      type: 'confirm',
-      text: `วิดีโอใหม่พร้อมแล้ว:\n${product}\n${videoUrl}\n\nโพสต์ลง TikTok เลยไหม?`,
-      actions: [
-        { type: 'message', label: 'ใช่ โพสต์เลย', text: `ใช่ ${id}` },
-        { type: 'message', label: 'ไม่ ข้ามไป', text: `ไม่ ${id}` },
-      ],
+  // ส่งวิดีโอจริงให้ดูในไลน์ก่อน (ไม่ใช่แค่ลิงก์ข้อความ) แล้วค่อยตามด้วยปุ่มใช่/ไม่
+  // วิดีโอต้องมี preview image ประกอบด้วยเสมอ ถ้าไม่ได้ส่ง thumbnailUrl มา ใช้รูปสำรองของบอทเอง
+  const fallbackThumbnail = `${req.protocol}://${req.get('host')}/test-assets/video-thumbnail.jpg`;
+
+  await client.pushMessage(YOUR_USER_ID, [
+    {
+      type: 'video',
+      originalContentUrl: videoUrl,
+      previewImageUrl: thumbnailUrl || fallbackThumbnail,
     },
-  });
+    {
+      type: 'template',
+      altText: `อนุมัติวิดีโอสำหรับ ${product} หรือไม่?`,
+      template: {
+        type: 'confirm',
+        text: `วิดีโอใหม่พร้อมแล้ว: ${product}\n\nโพสต์ลง TikTok เลยไหม?`,
+        actions: [
+          { type: 'message', label: 'ใช่ โพสต์เลย', text: `ใช่ ${id}` },
+          { type: 'message', label: 'ไม่ ข้ามไป', text: `ไม่ ${id}` },
+        ],
+      },
+    },
+  ]);
 
   res.json({ ok: true, sent: true });
 });
