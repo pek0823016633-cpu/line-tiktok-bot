@@ -133,6 +133,16 @@ app.get('/tiktok/status', (req, res) => {
   res.json({ connected: !!tiktok.loadTokens() });
 });
 
+// ตรวจสถานะจริงของ publish_id หนึ่งรายการ (ไว้ debug ว่าโพสต์ไปจริงหรือไม่)
+app.get('/tiktok/publish-status/:publishId', async (req, res) => {
+  try {
+    const status = await tiktok.checkPublishStatus(req.params.publishId);
+    res.json(status);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // เรียกหลังอนุมัติวิดีโอ: โพสต์จริงขึ้น TikTok แล้วแจ้งผลกลับทาง LINE
 // (ไม่ await ตรงจุดที่เรียก เพราะอยากตอบ replyMessage ให้ไวก่อน ค่อยส่งผลทีหลังด้วย pushMessage)
 async function postApprovedVideo(id) {

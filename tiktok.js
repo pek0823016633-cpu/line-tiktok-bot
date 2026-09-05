@@ -171,9 +171,29 @@ async function postVideoFromUrl({ videoUrl, title }) {
   return { publishId, privacyLevel };
 }
 
+// เช็คสถานะจริงของการโพสต์ (publish_id ที่ init คืนมาแค่บอกว่า "รับคำขอแล้ว"
+// ไม่ได้แปลว่าโพสต์สำเร็จจริง — ต้องเรียกตัวนี้เพื่อดูผลลัพธ์จริง)
+async function checkPublishStatus(publishId) {
+  const accessToken = await getValidAccessToken();
+  const res = await fetch('https://open.tiktokapis.com/v2/post/publish/status/fetch/', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json; charset=UTF-8',
+    },
+    body: JSON.stringify({ publish_id: publishId }),
+  });
+  const data = await res.json();
+  if (data.error && data.error.code !== 'ok') {
+    throw new Error(`TikTok status fetch ล้มเหลว: ${data.error.code} ${data.error.message}`);
+  }
+  return data.data;
+}
+
 module.exports = {
   getAuthUrl,
   exchangeCodeForToken,
   postVideoFromUrl,
+  checkPublishStatus,
   loadTokens,
 };
