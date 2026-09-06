@@ -27,6 +27,28 @@ const config = {
 
 const YOUR_USER_ID = process.env.LINE_USER_ID; // กรอกหลังจากคุณส่งข้อความแรกหาบอท
 
+// ใช้อัปโหลดรูปที่รับจาก LINE ขึ้น GitHub ทันที กัน Render free tier ล้าง disk
+// (ephemeral) ทิ้งก่อนมีคนมาดึงรูปไปทำวิดีโอ — ดูฟังก์ชัน uploadToGitHub ด้านล่าง
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+const GITHUB_REPO = 'pek0823016633-cpu/line-tiktok-bot';
+
+async function uploadToGitHub(repoPath, buffer, message) {
+  const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${repoPath}`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${GITHUB_TOKEN}`,
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'line-tiktok-bot',
+    },
+    body: JSON.stringify({ message, content: buffer.toString('base64'), branch: 'master' }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(`GitHub upload ล้มเหลว: ${data.message || res.status}`);
+  }
+  return data.content.download_url;
+}
+
 const app = express();
 const client = new line.Client(config);
 
@@ -103,7 +125,37 @@ const INCOMING_DIR = path.join(__dirname, 'test-assets', 'incoming');
 fs.mkdirSync(INCOMING_DIR, { recursive: true });
 
 // รายการรูปที่เพิ่งได้รับทาง LINE เรียงจากใหม่ไปเก่า — ใช้เช็คว่ามีรูปใหม่เข้ามาไหม
-app.get('/incoming-images', (req, res) => {
+// อ่านจาก GitHub เป็นหลัก (ทนต่อ Render ล้าง disk ได้) แล้วค่อย fallback มาอ่าน
+// จากดิสก์ในเครื่องถ้าเรียก GitHub ไม่ได้ — ชื่อไฟล์ขึ้นต้นด้วย timestamp อยู่แล้ว
+// เรียงตามชื่อจึงเท่ากับเรียงตามเวลาที่ได้รับ
+app.get('/incoming-images', async (req, res) => {
+  if (GITHUB_TOKEN) {
+    try {
+      const ghRes = await fetch(
+        `https://api.github.com/repos/${GITHUB_REPO}/contents/test-assets/incoming`,
+        {
+          headers: {
+            Authorization: `Bearer ${GITHUB_TOKEN}`,
+            Accept: 'application/vnd.github+json',
+            'User-Agent': 'line-tiktok-bot',
+          },
+        }
+      );
+      if (ghRes.status === 404) {
+        return res.json({ images: [] });
+      }
+      const items = await ghRes.json();
+      if (!ghRes.ok) throw new Error(items.message || `GitHub API error ${ghRes.status}`);
+      const images = items
+        .filter((item) => item.type === 'file' && /\.(jpe?g|png)$/i.test(item.name))
+        .sort((a, b) => (a.name < b.name ? 1 : -1))
+        .map((item) => ({ name: item.name, url: item.download_url }));
+      return res.json({ images });
+    } catch (err) {
+      console.error('อ่านรายการรูปจาก GitHub ไม่สำเร็จ, ใช้ดิสก์ในเครื่องแทน:', err.message);
+    }
+  }
+
   const files = fs
     .readdirSync(INCOMING_DIR)
     .map((name) => ({ name, mtime: fs.statSync(path.join(INCOMING_DIR, name)).mtimeMs }))
@@ -310,6 +362,22 @@ async function handleImageMessage(event) {
   const filename = `${Date.now()}-${event.message.id}.jpg`;
   fs.writeFileSync(path.join(INCOMING_DIR, filename), buffer);
   console.log(`ได้รับรูปจาก LINE: ${filename} (${buffer.length} bytes)`);
+
+  // อัปโหลดขึ้น GitHub ทันที (รอให้เสร็จก่อนตอบกลับ เพราะ Render free tier
+  // ไม่รับประกันว่างานเบื้องหลังจะรันจนจบหลังตอบ webhook response ไปแล้ว)
+  // กัน disk ที่เป็น ephemeral ถูกล้างทิ้งก่อนมีคนมาดึงรูปไปทำวิดีโอทัน
+  if (GITHUB_TOKEN) {
+    try {
+      await uploadToGitHub(
+        `test-assets/incoming/${filename}`,
+        buffer,
+        `Incoming photo from LINE: ${filename}`
+      );
+      console.log(`อัปโหลดรูป ${filename} ขึ้น GitHub สำเร็จ`);
+    } catch (err) {
+      console.error(`อัปโหลดรูป ${filename} ขึ้น GitHub ไม่สำเร็จ:`, err.message);
+    }
+  }
 
   return client.replyMessage(event.replyToken, {
     type: 'text',
